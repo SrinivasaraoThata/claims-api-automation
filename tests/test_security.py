@@ -11,13 +11,7 @@ def test_security_rbac_req_sec_01(api_session):
     second_member = DataFactory.generate_member()
     second_client = ParaBankClient()
     
-    second_customer_id = second_client.register(
-        first_name=second_member["first_name"],
-        last_name=second_member["last_name"],
-        username=second_member["username"],
-        password=second_member["password"],
-        ssn=second_member["ssn"]
-    )
+    second_customer_id = second_client.register(second_member)
     
     second_client.login(username=second_member["username"], password=second_member["password"])
     second_client.get_accounts(second_customer_id)

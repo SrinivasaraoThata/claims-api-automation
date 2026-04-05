@@ -8,40 +8,67 @@ class ParaBankClient:
         self.session = requests.Session()
         self.session.headers.update({"Accept": "application/json"})
 
-    def register(self, first_name, last_name, username, password, ssn):
+    def register(self, member_data):
         # Establish session first
         reg_url = "https://parabank.parasoft.com/parabank/register.htm"
         self.session.get(reg_url)
         
         payload = {
-            "customer.firstName": first_name,
-            "customer.lastName": last_name,
-            "customer.address.street": "123 Test St",
-            "customer.address.city": "Boston",
-            "customer.address.state": "MA",
-            "customer.address.zipCode": "02101",
-            "customer.phoneNumber": "555-0100",
-            "customer.ssn": ssn,
-            "customer.username": username,
-            "customer.password": password,
-            "repeatedPassword": password
+            "customer.firstName": member_data["first_name"],
+            "customer.lastName": member_data["last_name"],
+            "customer.address.street": member_data["address"],
+            "customer.address.city": member_data["city"],
+            "customer.address.state": member_data["state"],
+            "customer.address.zipCode": member_data["zip_code"],
+            "customer.phoneNumber": member_data["phone_number"],
+            "customer.ssn": member_data["ssn"],
+            "customer.username": member_data["username"],
+            "customer.password": member_data["password"],
+            "repeatedPassword": member_data["password"]
         }
         headers = {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            'Content-Type': 'application/x-www-form-urlencoded'
         }
         response = self.session.post(reg_url, data=payload, headers=headers)
         assert response.status_code in [200, 302], f"Expected status 200 or 302, got {response.status_code}. Response: {response.text}"
         
-        # After successful registration, use the login method to get the customer_id
-        return self.login(username, password)
+        # Check for successful registration message in response body
+        if "Your account was created successfully" not in response.text:
+            # Print full response text for debugging
+            # print(f"DEBUG: Registration response: {response.text}") # Trace this in log
+            pass
+        
+        # Add a short delay to ensure ParaBank backend persists the new user before REST login
+        import time
+        time.sleep(1)
+        
+        return self.login(member_data["username"], member_data["password"])
 
     def login(self, username, password):
         from urllib.parse import quote
+        import time
+        # Ensure credentials are clean of whitespace
+        username = username.strip()
+        password = password.strip()
         url = f"{self.BASE_URL}/login/{quote(username)}/{quote(password)}"
-        response = self.session.get(url)
-        assert response.status_code == 200, f"Expected status 200, got {response.status_code}. Response: {response.text}"
+        
+        # ParaBank REST API sync latency can be unpredictable.
+        # We use a robust retry mechanism (up to 10 seconds of attempts).
+        for attempt in range(10):
+            response = self.session.get(url)
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    customer_id = data.get("id")
+                    if customer_id:
+                        return customer_id
+                except:
+                    pass # Continue to retry if JSON is invalid
+            
+            if attempt < 9:
+                time.sleep(1)
+            
+        assert response.status_code == 200, f"Login failed for {username} after retries. Expected 200, got {response.status_code}. Response: {response.text}"
         return response.json().get("id")
 
     def get_accounts(self, customer_id):
@@ -71,4 +98,15 @@ class ParaBankClient:
         url = f"{self.BASE_URL}/accounts/{account_id}"
         response = self.session.get(url)
         assert response.status_code == 200, f"Expected status 200, got {response.status_code}. Response: {response.text}"
+        return response.json()
+
+    def create_account(self, customer_id, from_account_id):
+        url = f"{self.BASE_URL}/createAccount"
+        params = {
+            "customerId": customer_id,
+            "newAccountType": 1,
+            "fromAccountId": from_account_id
+        }
+        response = self.session.post(url, params=params)
+        assert response.status_code == 200
         return response.json()

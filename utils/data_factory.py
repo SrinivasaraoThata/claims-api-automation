@@ -13,17 +13,20 @@ class DataFactory:
         unique_digits = f"{random.randint(0, 999999):06d}"
         username = f"{first_name.lower()}{last_name.lower()}{unique_digits}"
         
+        # ParaBank Rest API can be picky with characters, use simple alphanumeric password
+        password = f"Pass{random.randint(1000, 9999)}"
+        
         return {
             "first_name": first_name,
             "last_name": last_name,
             "username": username,
-            "password": fake.password(),
-            "ssn": fake.ssn(),  # Faker's ssn method returns XXX-XX-XXXX format by default
+            "password": password,
+            "ssn": fake.ssn(),
             "address": fake.street_address(),
             "city": fake.city(),
             "state": fake.state_abbr(),
             "zip_code": fake.zipcode(),
-            "phone_number": fake.phone_number()
+            "phone_number": "555-010-0000"
         }
 
     @staticmethod
